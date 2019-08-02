@@ -6,6 +6,10 @@
 		/*Бинарный поиск значения по ключу в текстовом файле.
 			
 		Пограмма реализует поиск ключа следующим образом.
+		
+		Из соображений занимаемой памяти (не более размера возможной максимальной записи) чтени файла проводится блочно.
+		Т.к. записи не фиксированы позиция в файле при делении на два может разрывать отдельные записи(в дальнейшем 
+		создает проблему которую я не решил). После позиционирования алгоритм реализует поиск ближайшей целой записи, считывания ее и сравниения с искомым ключом. В соответствии с принципом бинарного поиска переходит на соответствующую половину и все повторяется.
 
 		1. Получает общий размер файла в байтах, вычисляем середину.
 		2. Открываем файл переходим в середину файла (функция seek()).
@@ -19,74 +23,82 @@
 		10.Блок проверок. 
 			- Есть совпадения - возвращаем значения.
 			- Если значение меньше идем по текстовому массиву налево, иначе направо, предварительно вычислив следующую позицию.
-			- Позиция вычисляется исходя из данных о размере сканируемого участка, начала и конца подстроки. Чтобы попасть в середину левой или правой части массива.
+			- Позиция вычисляется исходя из данных о размере сканируемого участка, начала и конца подстроки, чтобы попасть в середину левой или правой части массива.
 		11. Рекурсивно вызываем туже функцию и передаем позиции курсора, размера сканируемой части массива и др.
 
 
 
-		Программа не доработанна. Находит не все значения.
+		Программа не доработанна. Находит не все значения потому, что входит в "колебательный режим". Искомая строчка с ключем\значением постоянно рвется и остается в левой и правой части.
 
 		*/
 
-	$handle = fopen('lorem1.txt', rb) or die("Mistake");
-
-					$filesize = filesize('lorem1.txt');
+		// Открываем файл, рассчитываем начальные значения для функции
+		$handle = fopen('lorem1.txt', rb) or die("Mistake");
+		$filesize = filesize('lorem1.txt');
 		echo 'filesize: '. $range = filesize('lorem1.txt');
 		echo  '<br>startPosition: '.$startPosition = floor($range / 2);
 		echo  '<br>key: '.$key = 'ключ184';
-		 position($startPosition,  $range, $handle, $key, $filesize);
+		// Вызываем функцию
+		position($startPosition,  $range, $handle, $key, $filesize);
 
 
 		function position($startPosition,  $range, $handle, $key, $filesize)
 		{		
 
-
+				// Переходим в середину файла
 				fseek($handle, $startPosition);
-			echo '<br>string: '. $string = fread($handle, 100);
-
+				// Считываем первый блок
+				echo '<br>string: '. $string = fread($handle, 100);
+				// Находим в прочитанной строке позицию '\x0A'
 				$subStringPosition = strpos($string, '\x0A') + 4;
-			echo '<br>startPosition: '. $startPosition = $startPosition + $subStringPosition;
-
+				echo '<br>startPosition: '. $startPosition = $startPosition + $subStringPosition;
+				// Меняем позицию на конец символа '\x0A'
 				fseek($handle, $startPosition);
+				// Считываем блок текста с найденного начала записи ('\x0A')
 				echo '<br>string after position: '.$string = fread($handle, 100);
 				
-
+				// Находим  позицию следующего '\x0A'
 				$subStringPosition = strpos($string, '\x0A');
+				// Фиксируем конец найденной записи
 				$endPosition = $startPosition + $subStringPosition;
 
-
+				// Возвращаемся к началку записи и считываем ее
 				fseek($handle, $startPosition);
 			 	$lenth = $endPosition - $startPosition;
 				$string = fread($handle, $lenth);
-
+				// Извлекаем запись в массив и проводим сравнения
 				$arr = explode('\t', $string);
 
-
+				// Вывод ключа и значения в случае совпадения
 				if (strnatcmp($key, $arr[0]) == 0){
-					echo '<br><br><br> Есть совпадение Ключ: '.$arr[0].'  Значение:'.$arr[1];
+					echo '<br><br><br> Есть совпадение Ключ: '.$arr[0].'  Значение: '.$arr[1];
 					return true;
 				} 
-
-				if (strnatcmp($key, $arr[0]) < 0 ){ //Идем налево
+				// Идем налево
+				if (strnatcmp($key, $arr[0]) < 0 ){ 
 			
 					echo '<br>range: '.$range = $startPosition;
 					$nextPosition = floor($startPosition / 2);
 
-			echo '<br><br>Налево nextPosition = '.$nextPosition.'  range = '.$range.'   handle = '.$handle;
+					echo '<br><br>Налево nextPosition = '.$nextPosition.'  range = '.$range.'   handle = '.$handle;
 					return position($nextPosition,  $range, $handle, $key, $filesize);
-					
-					}
-				if (strnatcmp($key, $arr[0]) > 0 ){ //Идем направо
+
+				}
+				//Идем направо
+				if (strnatcmp($key, $arr[0]) > 0 ){ 
 		
 					 	$nextPosition = floor($endPosition + (($range - $endPosition) / 2));
-			 echo '<br><br>Направо nextPosition = '.$nextPosition.'  endPosition = '.$endPosition.'  range = '.$range.'   handle = '.$handle;
-				 if ($nextPosition > $filesize){
-				 	echo '<br><br><br>Совпадений не найдено.';
-					 return false;
-				 } 
-					  	return position($nextPosition,  $range, $handle, $key, $filesize);
+				 		echo '<br><br>Направо nextPosition = '.$nextPosition.'  endPosition = '.$endPosition.'  range = '.$range.'   handle = '.$handle;
+					 // Это костыль. Если Ключ не будет найден и уйдет за пределы размера файла, 
+					 // выполнение прервется с выводом соответствующего сообщения
+					if ($nextPosition > $filesize){
+					 	echo '<br><br><br>Совпадений не найдено.';
+						return false;
+				 	} 
+				 	// Рекурсивный вызов функции самой себя
+					 return position($nextPosition,  $range, $handle, $key, $filesize);
 
-				 }
+				}
 				
 
 				
